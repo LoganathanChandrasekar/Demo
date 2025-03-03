@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog Post</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Lexend', sans-serif;
+            color: #2d3e50;
+            line-height: 1.6;
+            padding-top: 40px;
+        }
+
+        .container {
+            max-width: 800px;
+        }
+
+        .breadcrumb {
+            margin-bottom: 40px;
+        }
+
+        .breadcrumb-item a {
+            color: #516f90;
+            text-decoration: none;
+        }
+
+        .breadcrumb-item + .breadcrumb-item::before {
+            content: "›";
+            color: #516f90;
+        }
+
+        .article-title {
+            font-size: 40px;
+            font-weight: 700;
+            line-height: 1.2;
+            margin-bottom: 40px;
+            color: #2d3e50;
+        }
+
+        .cta-button {
+            background-color: #ff7a59;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 4px;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 15px;
+            margin-bottom: 50px;
+            border: none;
+        }
+
+        .cta-button:hover {
+            background-color: #ff8f73;
+            color: white;
+        }
+
+        .author-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .author-details {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .author-image {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #e0e0e0;
+        }
+
+        .author-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+            font-size: 16px;
+        }
+
+        .publish-date, .update-date {
+            color: #516f90;
+            font-size: 14px;
+        }
+
+        .welcome-text {
+            margin-top: 30px;
+            font-size: 16px;
+            line-height: 1.8;
+            margin-bottom: 30px;
+        }
+
+        .creator-link {
+            color: #516f90;
+            text-decoration: none;
+        }
+
+        .creator-link:hover {
+            color: #2d3e50;
+        }
+
+        .article-content h2 {
+            font-size: 28px;  /* Adjusted to match image */
+            font-weight: 700;
+            margin-bottom: 30px;
+            color: #2d3e50;
+            line-height: 1.3;
+        }
+
+        .article-content h3 {
+            font-size: 20px;  /* Adjusted to match image */
+            font-weight: 600;
+            margin-top: 30px;
+            margin-bottom: 16px;
+            color: #2d3e50;
+        }
+
+        .article-content p {
+            font-size: 15px;  /* Adjusted to match image */
+            margin-bottom: 16px;
+            line-height: 1.7;
+            color: #516f90;
+        }
+
+        .article-content ul {
+            padding-left: 20px;
+            margin-top: 20px;
+        }
+
+        .article-content ul li {
+            font-size: 15px;  /* Adjusted to match image */
+            color: #516f90;
+            margin-bottom: 12px;
+            line-height: 1.7;
+        }
+
+        .article-content ul li strong {
+            color: #2d3e50;
+            font-weight: 600;
+        }
+        .post-navigation {
+            margin-top: 60px;
+            padding-top: 40px;
+            border-top: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .nav-post {
+            flex: 1;
+            text-decoration: none;
+            padding: 20px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-post:hover {
+            border-color: #ff7a59;
+            background-color: #fff8f6;
+        }
+
+        .nav-post.previous {
+            text-align: left;
+        }
+
+        .nav-post.next {
+            text-align: right;
+        }
+
+        .nav-label {
+            font-size: 14px;
+            color: #516f90;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .nav-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2d3e50;
+            line-height: 1.4;
+        }
+
+        .nav-post:hover .nav-title {
+            color: #ff7a59;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="#">Home</a></li>
+                <li class="breadcrumb-item"><a href="#">Marketing</a></li>
+                <li class="breadcrumb-item active">Learn from My Mistakes: 7 Digital Course Pitfalls to Skip</li>
+            </ol>
+        </nav>
+
+        <article>
+            <h1 class="article-title">Learn from My Mistakes: 7 Digital Course Pitfalls to Skip</h1>
+
+            <a href="#" class="cta-button">
+                Download Now: The Beginner's Guide to Digital Marketing
+            </a>
+
+            <div class="author-info">
+                <div class="author-details">
+                    <div class="author-image"></div>
+                    <div>
+                        <div class="author-name">Amy Porterfield</div>
+                        <div class="publish-date">Published: April 05, 2024</div>
+                    </div>
+                </div>
+                <div class="update-date">Updated: December 02, 2024</div>
+            </div>
+
+            <div class="welcome-text">
+                Welcome to <strong>Creator Columns</strong>, where we bring expert 
+                <a href="#" class="creator-link">HubSpot Creator</a> voices to the blogs 
+                that inspire and help you grow better.
+            </div>
+
+            <div class="article-content">
+                <h2>The 7 Biggest Mistakes I've Made as a Digital Course Creator</h2>
+                
+                <h3>1. Launching without hands-on experience</h3>
+                
+                <p>While your digital course topic may evolve with your business, it's important to have hands-on experience in whatever it is you're teaching.</p>
+                
+                <p>Want to teach a course about real estate investing? Fantastic, but make sure you have experience as a real estate investor. Want to teach hair stylists how to successfully open their own salons? Do it. But you should have opened your own salon first.</p>
+                
+                <p>I launched my first digital course without any prior experience in the niche I was teaching about. In my hurry to establish myself as an expert, I overlooked the importance of having hands-on experience. Can you guess how this turned out? Yep, my first course was a total flop.</p>
+                
+                <p>Beyond the obvious, here are a few reasons why you should get some hands-on experience in your niche before launching a course:</p>
+                
+                <ul>
+                    <li><strong>Credibility:</strong> To build trust with your future students, you need to show them that you're the real deal. Having actual experience in the subject matter is the first step to gaining their confidence.</li>
+                    <li><strong>Effective Teaching:</strong> When you have demonstrated experience, your teaching becomes more powerful. You can relate to the challenges your students might face and provide practical, real-world solutions for them.</li>
+                    <li><strong>Problem Solving:</strong> As an experienced practitioner, you've likely encountered and conquered the hurdles in your field. This experience allows you to anticipate the common issues your students might encounter and equip them with solutions — kind of like what I'm doing in this blog post.</li>
+                </ul>
+            </div>
+            <nav class="post-navigation">
+                <a href="#" class="nav-post previous">
+                    <span class="nav-label">← Previous Post</span>
+                    <div class="nav-title">5 Essential Marketing Strategies for Course Creators in 2024</div>
+                </a>
+                <a href="#" class="nav-post next">
+                    <span class="nav-label">Next Post →</span>
+                    <div class="nav-title">How to Price Your Digital Course: A Complete Guide</div>
+                </a>
+            </nav>
+        </article>
+    </div>
+</body>
+</html>

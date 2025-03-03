@@ -1,0 +1,49 @@
+:root {
+    --hubspot-orange: #ff7a59;
+    --hubspot-text: #33475b;
+    --hubspot-gray: #f5f8fa;
+  }
+  
+  body {
+    font-family: 'Lexend', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    color: #2d3e50;
+    line-height: 1.6;
+}
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Source Sans Pro', sans-serif;
+  }
+  
+  .btn-primary {
+    background-color: var(--hubspot-orange);
+    border-color: var(--hubspot-orange);
+  }
+  
+  .btn-primary:hover {
+    background-color: #f66f4d;
+    border-color: #f66f4d;
+  }
+  
+  .breadcrumb-item a {
+    color: var(--hubspot-text);
+    text-decoration: none;
+  }
+  
+  .breadcrumb-item a:hover {
+    color: var(--hubspot-orange);
+  }
+  
+  .bg-light {
+    background-color: var(--hubspot-gray) !important;
+  }
+  
+  .lead {
+    font-size: 1.25rem;
+    font-weight: 400;
+  }
+  
+  /* Custom list styling */
+  .list-unstyled li::before {
+    color: var(--hubspot-orange);
+  }
+  

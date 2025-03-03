@@ -1,0 +1,36 @@
+{
+	"speakerID": {
+		"description": "Speaker ID",
+		"values": ["data.speakerID"]
+	},
+	"country": {
+		"description": "Speaker country",
+		"values": ["data.country"]
+	},
+	"speed": {
+		"description": "Speaking speed",
+		"values": ["data.speed"]
+	},
+	
+	"gender": {
+
+		"description": "Gender",
+		"values": ["data.gender"]
+	},
+	"age": {
+		"description": "Age range",
+		"values": ["data.ageRange"]
+	},
+	"utterance": {
+		"description": "Wake-up word content",
+		"value": "data.text"
+	},
+	"startIndex": {
+		"description": "Wake-up word start time",
+		"value": 1.08
+	},
+	"endIndex": {
+		"description": "Wake-up word end time",
+		"value": 4.11
+	}
+}

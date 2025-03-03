@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marketing Blog</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.8.1/slick.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.8.1/slick-theme.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+        }
+        
+        .hero-section {
+            background-color: #FFB067;
+            border-radius: 0 0 50% 0;
+            padding-bottom: 40px;
+        }
+        
+        .hero-card {
+            background-color: #FFF8F0;
+            border-radius: 8px;
+            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            height: 100%;
+            margin: 10px;
+        }
+        
+        .hero-image {
+            width: 100%;
+            height: 462px;
+            object-fit: cover;
+            background-color: #e9e9e9;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        
+        .hero-title {
+            font-weight: bold;
+            font-size: 24px;
+            color: #1A1A1A;
+            margin-bottom: 5px;
+        }
+        
+        .hero-subtitle {
+            font-size: 18px;
+            color: #666666;
+        }
+        
+        .hero-meta {
+            font-size: 14px;
+            color: #666666;
+            margin-top: 10px;
+        }
+        
+        .featured-posts {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.06);
+        }
+        
+        .featured-title {
+            font-weight: bold;
+            font-size: 18px;
+            color: #1A1A1A;
+            margin-bottom: 15px;
+        }
+        
+        .featured-divider {
+            height: 2px;
+            background-color: #E5E5E5;
+            margin-bottom: 20px;
+        }
+        
+        .featured-post {
+            padding: 15px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .featured-post:last-child {
+            border-bottom: none;
+        }
+        
+        .post-title {
+            font-size: 16px;
+            color: #1A1A1A;
+            font-weight: 500;
+            margin-bottom: 5px;
+            line-height: 1.4;
+        }
+        
+        .post-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            color: #666666;
+            margin-top: 10px;
+        }
+        
+        .article-card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.06);
+            margin: 10px;
+            height: 350px;
+        }
+        
+        .article-image {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+            border-radius: 8px 8px 0 0;
+            background-color: #e9e9e9;
+        }
+        
+        .article-content {
+            padding: 20px;
+        }
+        
+        .article-title {
+            font-weight: bold;
+            font-size: 16px;
+            color: #1A1A1A;
+            margin-bottom: 10px;
+            line-height: 1.4;
+        }
+        
+        .article-description {
+            font-size: 14px;
+            color: #666666;
+        }
+        
+        /* Slider customizations */
+        .slick-prev, .slick-next {
+            z-index: 10;
+        }
+        
+        .slick-prev {
+            left: 10px;
+        }
+        
+        .slick-next {
+            right: 10px;
+        }
+        
+        .slick-dots {
+            bottom: -40px;
+        }
+        
+        .section-title {
+            font-weight: bold;
+            font-size: 24px;
+            margin-bottom: 30px;
+        }
+        
+        /* Add some space below sliders for dots */
+        .hero-slider-container, .article-slider-container {
+            margin-bottom: 50px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero Section -->
+    <section class="hero-section pt-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="hero-slider-container">
+                        <div class="hero-slider">
+                            <!-- Hero Slide 1 -->
+                            <div class="hero-card">
+                                <div class="hero-image">
+                                    <img src="/api/placeholder/800/460" alt="Marketing Trends" class="img-fluid hero-image">
+                                </div>
+                                <h1 class="hero-title">The 2025 State of Marketing & Trends Report:</h1>
+                                <h2 class="hero-subtitle">Data from 1700+ Global Marketers</h2>
+                                <p class="hero-meta">Maxwell Iskiev • 6/26/24</p>
+                            </div>
+                            
+                            <!-- Hero Slide 2 -->
+                            <div class="hero-card">
+                                <div class="hero-image">
+                                    <img src="/api/placeholder/800/460" alt="Marketing Innovations" class="img-fluid hero-image">
+                                </div>
+                                <h1 class="hero-title">Innovations in Digital Marketing for 2025</h1>
+                                <h2 class="hero-subtitle">Latest Techniques from Top Brands</h2>
+                                <p class="hero-meta">Sarah Johnson • 5/15/24</p>
+                            </div>
+                            
+                            <!-- Hero Slide 3 -->
+                            <div class="hero-card">
+                                <div class="hero-image">
+                                    <img src="/api/placeholder/800/460" alt="AI Marketing" class="img-fluid hero-image">
+                                </div>
+                                <h1 class="hero-title">AI Revolution in Content Marketing</h1>
+                                <h2 class="hero-subtitle">How Automation is Changing the Game</h2>
+                                <p class="hero-meta">David Chen • 4/12/24</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4 mt-4 mt-lg-0">
+                    <div class="featured-posts">
+                        <h3 class="featured-title">Featured Posts</h3>
+                        <div class="featured-divider"></div>
+                        
+                        <div class="featured-post">
+                            <h4 class="post-title">The Top Types of AI-Generated Content in Marketing [New Data, Examples & Tips]</h4>
+                            <div class="post-meta">
+                                <span>Tristen Taylor</span>
+                                <span>7/23/24</span>
+                            </div>
+                        </div>
+                        
+                        <div class="featured-post">
+                            <h4 class="post-title">What is Sales Planning? How to Create a Sales Plan</h4>
+                            <div class="post-meta">
+                                <span>Jay Fuchs</span>
+                                <span>9/25/24</span>
+                            </div>
+                        </div>
+                        
+                        <div class="featured-post">
+                            <h4 class="post-title">6 Steps to Create an Outstanding Marketing Plan [Free Templates]</h4>
+                            <div class="post-meta">
+                                <span>Rebecca Riserbato</span>
+                                <span>7/23/24</span>
+                            </div>
+                        </div>
+                        
+                        <div class="featured-post">
+                            <h4 class="post-title">Customer Journey Maps: How to Create Really Good Ones [Examples + Template]</h4>
+                            <div class="post-meta">
+                                <span>Aaron Agius</span>
+                                <span>2/10/25</span>
+                            </div>
+                        </div>
+                        
+                        <div class="featured-post">
+                            <h4 class="post-title">SEO Web Design: How to Optimize Your Design to Rank Better</h4>
+                            <div class="post-meta">
+                                <span>Erin Pennings</span>
+                                <span>12/16/24</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Article Grid Section -->
+    <section class="pt-5 pb-5">
+        <div class="container">
+            <h2 class="section-title">Latest Articles</h2>
+            <div class="article-slider-container">
+                <div class="article-slider">
+                    <div class="article-card">
+                        <img src="/api/placeholder/400/320" alt="Digital Course Pitfalls" class="article-image">
+                        <div class="article-content">
+                            <h3 class="article-title">Learn from My Mistakes: 7 Digital Course Pitfalls to Skip</h3>
+                            <p class="article-description">Discover the top digital course pitfalls...</p>
+                        </div>
+                    </div>
+                    
+                    <div class="article-card">
+                        <img src="/api/placeholder/400/320" alt="Representation in Marketing" class="article-image">
+                        <div class="article-content">
+                            <h3 class="article-title">How To Do Representation in Marketing the Right Way</h3>
+                        </div>
+                    </div>
+                    
+                    <div class="article-card">
+                        <img src="/api/placeholder/400/320" alt="Short-Form Content" class="article-image">
+                        <div class="article-content">
+                            <h3 class="article-title">The Psychology of Short-Form Content</h3>
+                        </div>
+                    </div>
+                    
+                    <div class="article-card">
+                        <img src="/api/placeholder/400/320" alt="AI for Social Media" class="article-image">
+                        <div class="article-content">
+                            <h3 class="article-title">How to Use AI For a More Effective Social Media Strategy</h3>
+                        </div>
+                    </div>
+                    
+                    <div class="article-card">
+                        <img src="/api/placeholder/400/320" alt="Email Marketing" class="article-image">
+                        <div class="article-content">
+                            <h3 class="article-title">10 Email Marketing Tactics That Drive Conversions</h3>
+                        </div>
+                    </div>
+                    
+                    <div class="article-card">
+                        <img src="/api/placeholder/400/320" alt="SEO Strategies" class="article-image">
+                        <div class="article-content">
+                            <h3 class="article-title">SEO Strategies for 2025: What's Working Now</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.8.1/slick.min.js"></script>
+    <script>
+        $(document).ready(function(){
+            // Initialize Hero Slider
+            $('.hero-slider').slick({
+                dots: true,
+                arrows: true,
+                infinite: true,
+                speed: 500,
+                fade: true,
+                cssEase: 'linear',
+                autoplay: true,
+                autoplaySpeed: 5000
+            });
+            
+            // Initialize Article Slider
+            $('.article-slider').slick({
+                dots: true,
+                arrows: true,
+                infinite: true,
+                speed: 300,
+                slidesToShow: 4,
+                slidesToScroll: 1,
+                autoplay: true,
+                autoplaySpeed: 4000,
+                responsive: [
+                    {
+                        breakpoint: 1200,
+                        settings: {
+                            slidesToShow: 3,
+                            slidesToScroll: 1
+                        }
+                    },
+                    {
+                        breakpoint: 992,
+                        settings: {
+                            slidesToShow: 2,
+                            slidesToScroll: 1
+                        }
+                    },
+                    {
+                        breakpoint: 576,
+                        settings: {
+                            slidesToShow: 1,
+                            slidesToScroll: 1
+                        }
+                    }
+                ]
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Viewer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* Core layout styles */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        .left-sidebar {
+            width: 40px;
+            height: 100vh;
+            background-color: #f1f1f1;
+            position: fixed;
+            left: 0;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+            border-right: 1px solid #e0e0e0;
+        }
+
+        .hamburger-menu {
+            padding: 10px;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+
+        .hamburger-line {
+            width: 20px;
+            height: 2px;
+            background-color: #555;
+            margin: 4px 0;
+            border-radius: 1px;
+        }
+
+        .sidebar-icon {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 40px;
+            color: #555;
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        .main-content {
+            margin-left: 40px;
+            margin-right: 280px;
+            height: 100vh;
+            background-color: #e5e9ea;
+            position: relative;
+            overflow: hidden; /* Changed from auto to hidden */
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .document-preview {
+            width: 100%;
+            height: calc(100vh - 50px); /* Adjusted to make room for scrollbar */
+            overflow: auto;
+            background-color: #f8f8f8;
+            border-radius: 4px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 20px 0;
+        }
+
+        .document-image {
+            width: auto;
+            height: auto;
+            max-width: 90%;
+            border: 1px solid #ddd;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .tool-buttons {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .tool-button {
+            width: 30px;
+            height: 30px;
+            background-color: white;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 14px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            cursor: pointer;
+            color: #555;
+        }
+
+        .page-navigation {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            background-color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+        }
+
+        .page-number {
+            font-size: 12px;
+            color: #555;
+            margin: 0 10px;
+        }
+
+        .right-panel {
+            width: 280px;
+            height: 100vh;
+            position: fixed;
+            right: 0;
+            top: 0;
+            background-color: white;
+            border-left: 1px solid #e0e0e0;
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        /* Form elements styling */
+        .section-header {
+            font-weight: bold;
+            margin: 15px 0 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #333;
+            font-size: 13px;
+        }
+
+        .section-header:first-of-type {
+            margin-top: 5px;
+        }
+
+        .error-info, .top-level-comments {
+            color: #666;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+
+        .error-info:before, .top-level-comments:before {
+            content: '▼';
+            font-size: 8px;
+            margin-right: 5px;
+            color: #666;
+        }
+
+        .comment-button {
+            background-color: #f5f5f5;
+            border: none;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 11px;
+            color: #333;
+        }
+
+        .add-button {
+            width: 20px;
+            height: 20px;
+            position: relative;
+            cursor: pointer;
+            font-size: 20px;
+            color: #666;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            line-height: 1;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 6px 10px;
+            font-size: 13px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .no-data {
+            color: #888;
+            font-size: 12px;
+            padding: 10px 0;
+            font-style: italic;
+        }
+
+        .panel-section {
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 15px;
+        }
+
+        .panel-group {
+            margin-bottom: 20px;
+        }
+
+        .document-type-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .document-type-label {
+            font-size: 13px;
+            color: #555;
+        }
+
+        /* Scrollbar at the bottom */
+        .document-scrollbar {
+            width: 100%;
+            height: 20px;
+            background-color: #f1f1f1;
+            position: relative;
+            border-radius: 10px;
+            margin-top: auto;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+
+        .scrollbar-thumb {
+            height: 100%;
+            width: 30%;
+            background-color: #ccc;
+            border-radius: 10px;
+            position: absolute;
+            left: 0;
+            cursor: pointer;
+        }
+
+        .scrollbar-thumb:hover {
+            background-color: #aaa;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Left sidebar with menu and tools -->
+    <div class="left-sidebar">
+        <div class="hamburger-menu">
+            <div class="hamburger-line"></div>
+            <div class="hamburger-line"></div>
+            <div class="hamburger-line"></div>
+        </div>
+        <div class="sidebar-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M5 4a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H5zm-.5 2.5A.5.5 0 0 1 5 6h6a.5.5 0 0 1 0 1H5a.5.5 0 0 1-.5-.5zM5 8a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H5zm0 2a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1H5z"/>
+                <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2zm10-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1z"/>
+            </svg>
+        </div>
+    </div>
+
+    <!-- Main content area with document preview -->
+    <div class="main-content">
+        <div class="document-preview">
+            <!-- Scientific poster shown in the image -->
+            <img src="https://via.placeholder.com/600x800?text=Virologic+Response+and+Safety+After+Oral+Administration+of+Nirmatrelvir+in+Non-Hospitalized+Adults+With+Symptomatic+COVID-19" 
+                alt="Scientific poster about Nirmatrelvir" class="document-image">
+        </div>
+
+        <!-- Scrollbar at the bottom -->
+        <div class="document-scrollbar">
+            <div class="scrollbar-thumb"></div>
+        </div>
+
+        <!-- Tool buttons on the left side -->
+        <div class="tool-buttons">
+            <div class="tool-button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+                </svg>
+            </div>
+            <div class="tool-button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/>
+                    <path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5v11z"/>
+                </svg>
+            </div>
+            <div class="tool-button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z"/>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Page navigation at the bottom -->
+        <div class="page-navigation">
+            <span class="page-number">1 / 1</span>
+        </div>
+    </div>
+
+    <!-- Right panel with form controls -->
+    <div class="right-panel">
+        <!-- Error Info Section -->
+        <div class="panel-group">
+            <div class="error-info">
+                Error Info
+            </div>
+        </div>
+
+        <!-- Top Level Comments Section -->
+        <div class="panel-group">
+            <div class="top-level-comments">
+                Top Level Comments
+            </div>
+            <div class="d-flex justify-content-end mt-2">
+                <button class="comment-button">Comment</button>
+            </div>
+        </div>
+
+        <!-- Document Type Section -->
+        <div class="panel-group">
+            <div class="document-type-row">
+                <span class="document-type-label">Document Type (0)</span>
+                <button class="comment-button">Comment</button>
+            </div>
+            <input type="text" class="form-control mb-3" placeholder="">
+
+            <div class="document-type-row">
+                <span class="document-type-label">Document Type Description (0)</span>
+                <button class="comment-button">Comment</button>
+            </div>
+            <input type="text" class="form-control mb-3" placeholder="">
+
+            <div class="document-type-row">
+                <span class="document-type-label">Document Category (0)</span>
+                <button class="comment-button">Comment</button>
+            </div>
+            <div class="d-flex align-items-center mb-3">
+                <span class="me-2">-1</span>
+                <hr class="flex-grow-1 mx-2">
+            </div>
+        </div>
+
+        <!-- Custom Types Section -->
+        <div class="section-header">
+            <span>Custom Types</span>
+            <div class="add-button">+</div>
+        </div>
+        <div class="no-data">No data</div>
+
+        <!-- Root Fields Section -->
+        <div class="section-header mt-4">
+            <span>Root Fields</span>
+            <div class="add-button">+</div>
+        </div>
+        <div class="no-data">No data</div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Add basic scrollbar functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const scrollbarThumb = document.querySelector('.scrollbar-thumb');
+            const scrollbar = document.querySelector('.document-scrollbar');
+            const docPreview = document.querySelector('.document-preview');
+            
+            let isDragging = false;
+            let startX;
+            let scrollLeftStart;
+            
+            scrollbarThumb.addEventListener('mousedown', function(e) {
+                isDragging = true;
+                startX = e.pageX - scrollbarThumb.offsetLeft;
+                scrollLeftStart = docPreview.scrollLeft;
+                e.preventDefault();
+            });
+            
+            document.addEventListener('mouseup', function() {
+                isDragging = false;
+            });
+            
+            document.addEventListener('mousemove', function(e) {
+                if (!isDragging) return;
+                
+                const x = e.pageX - scrollbar.getBoundingClientRect().left;
+                const walk = (x - startX);
+                const scrollbarWidth = scrollbar.offsetWidth;
+                const thumbWidth = scrollbarThumb.offsetWidth;
+                
+                const newLeft = Math.max(0, Math.min(scrollLeftStart + walk, scrollbarWidth - thumbWidth));
+                
+                // Calculate the corresponding scroll position for the preview
+                const scrollRatio = newLeft / (scrollbarWidth - thumbWidth);
+                const maxScroll = docPreview.scrollWidth - docPreview.clientWidth;
+                docPreview.scrollLeft = maxScroll * scrollRatio;
+                
+                // Update thumb position
+                scrollbarThumb.style.left = newLeft + 'px';
+            });
+            
+            // Update scrollbar thumb position when scrolling the document
+            docPreview.addEventListener('scroll', function() {
+                if (isDragging) return; // Don't update during dragging
+                
+                const scrollRatio = docPreview.scrollLeft / (docPreview.scrollWidth - docPreview.clientWidth);
+                const scrollbarWidth = scrollbar.offsetWidth;
+                const thumbWidth = scrollbarThumb.offsetWidth;
+                
+                scrollbarThumb.style.left = scrollRatio * (scrollbarWidth - thumbWidth) + 'px';
+            });
+        });
+    </script>
+</body>
+
+</html>

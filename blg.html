@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .section-titled {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 3rem;
+            color: #000;
+        }
+
+        .blog-card {
+            margin-bottom: 2rem;
+            text-decoration: none;
+            display: block;
+            color: inherit;
+        }
+
+        .blog-card:hover {
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .main-blog-image {
+            width: 100%;
+            height: 500px;
+            object-fit: cover;
+            border-radius: 24px;
+            margin-bottom: 1.5rem;
+        }
+
+        .small-blog-image {
+            width: 240px;
+            height: 160px;
+            object-fit: cover;
+            border-radius: 16px;
+        }
+
+        .category-badge {
+            display: inline-block;
+            padding: 4px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            background: white;
+            margin-bottom: 1rem;
+        }
+
+        .main-blog-title {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: #000;
+        }
+
+        .small-blog-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #000;
+            margin-bottom: 0.5rem;
+        }
+
+        .blog-meta {
+            color: #666;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .small-blog-wrapper {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .small-blog-content {
+            flex: 1;
+        }
+
+        .read-more {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 20px;
+            border-radius: 20px;
+            background: #fff;
+            border: 1px solid #ddd;
+            color: #000;
+            text-decoration: none;
+            font-size: 14px;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <section class="py-5">
+        <div class="container">
+            <h1 class="section-titled">Recent Blogs</h1>
+            
+            <div class="row g-5">
+                <!-- Main Blog Post -->
+                <div class="col-lg-7">
+                    <article class="blog-card">
+                        <div class="position-relative">
+                            <img src="/api/placeholder/800/500" alt="Technology blog" class="main-blog-image">
+                            <div class="content">
+                                <span class="category-badge">Technology</span>
+                                <h2 class="main-blog-title">Boost your online sales with these top conversion strategies</h2>
+                                <div class="blog-meta">
+                                    <span>Courtney Henry</span>
+                                    <span>November 10, 2024</span>
+                                    <span>2 min read</span>
+                                </div>
+                                <a href="#" class="read-more">Read more →</a>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+
+                <!-- Smaller Blog Posts -->
+                <div class="col-lg-5">
+                    <!-- Blog 1 -->
+                    <div class="small-blog-wrapper">
+                        <img src="/api/placeholder/240/160" alt="Lifestyle blog" class="small-blog-image">
+                        <div class="small-blog-content">
+                            <span class="category-badge">Lifestyle</span>
+                            <h3 class="small-blog-title">The ultimate guide to creating a standout portfolio in 2024</h3>
+                            <div class="blog-meta">
+                                <span>November 10, 2024</span>
+                                <span>7 min read</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Blog 2 -->
+                    <div class="small-blog-wrapper">
+                        <img src="/api/placeholder/240/160" alt="Science blog" class="small-blog-image">
+                        <div class="small-blog-content">
+                            <span class="category-badge">Science</span>
+                            <h3 class="small-blog-title">How to optimize your website for faster loading times</h3>
+                            <div class="blog-meta">
+                                <span>November 10, 2024</span>
+                                <span>4 min read</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Blog 3 -->
+                    <div class="small-blog-wrapper">
+                        <img src="/api/placeholder/240/160" alt="Hobbies blog" class="small-blog-image">
+                        <div class="small-blog-content">
+                            <span class="category-badge">Hobbies</span>
+                            <h3 class="small-blog-title">5 design trends shaping the future of digital experiences</h3>
+                            <div class="blog-meta">
+                                <span>November 10, 2024</span>
+                                <span>5 min read</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</body>
+</html>
