@@ -15,10 +15,10 @@ class AudioTranscriptionTool:
         """Initializes the AudioTranscriptionTool, setting up AWS clients and session state."""
         try:
             # --- AWS Credentials Handling ---
-            aws_access_key_id = "AKIAUD4REC47NZ24LDEG"  # Replace with your actual access key ID
-            aws_secret_access_key = "rRNAmwCj/OMeOhY5eVz69R3AHYzfy6DhIPbVuPFI" # Replace with your actual secret access key
+            aws_access_key_id = "access key ID"  # Replace with your actual access key ID
+            aws_secret_access_key = "secret access key" # Replace with your actual secret access key
             aws_region = "us-east-1"  # Or your desired AWS region
-            s3_bucket_name = "audio-transcripe-stt" # Replace with your actual S3 bucket name - **Corrected bucket name here**
+            s3_bucket_name = "audio-transcripe-stt" # Replace with your actual S3 bucket name - 
 
             if not s3_bucket_name:
                 st.error("S3_BUCKET_NAME is missing from Streamlit secrets. Please configure it.")
