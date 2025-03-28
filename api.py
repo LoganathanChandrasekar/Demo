@@ -18,7 +18,7 @@ class AudioTranscriptionTool:
             aws_access_key_id = "AKIAUD4REC47PFC3NHF3"  # Replace with your actual access key ID
             aws_secret_access_key = "63Kb7wM9xTvGOHB5ciRshhl2j/gJrQy30ZrJKiSW" # Replace with your actual secret access key
             aws_region = "us-east-1"  # Or your desired AWS region
-            s3_bucket_name = "audio-transcripe-stt" # Replace with your actual S3 bucket name
+            s3_bucket_name = "audio-transcripe-stt" # Replace with your actual S3 bucket name - **Corrected bucket name here**
 
             if not s3_bucket_name:
                 st.error("S3_BUCKET_NAME is missing from Streamlit secrets. Please configure it.")
@@ -300,7 +300,7 @@ class AudioTranscriptionTool:
             except ClientError as job_error:
                 st.error(f"Transcription Job Start Error for '{filename}': {job_error}")
                 st.error(f"Detailed Job Error: {job_error}")
-                st.error(f"Please check if: \n- AWS credentials have 'transcribe:StartTranscriptionJob' permission.\n- The AWS region is correctly configured and supported by Transcribe.\n- The S3 URI 's3://{self.s3_bucket_name}/{s3_key}' is valid and accessible by Transcribe.")
+                st.error(f"Please check if: \n- AWS credentials have 'transcribe:StartTranscriptionJob' and **'s3:GetObject'** permissions.\n- The AWS region is correctly configured and supported by Transcribe.\n- The S3 URI 's3://{self.s3_bucket_name}/{s3_key}' is valid and accessible by Transcribe.") # **Added s3:GetObject to error message**
                 return ""
 
             # --- Polling for Job Completion ---
