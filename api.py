@@ -1,729 +1,481 @@
 import streamlit as st
-import librosa
-import librosa.display
-import numpy as np
-import matplotlib.pyplot as plt
-import io
-import os
-import subprocess
-import sys
-import zipfile
-import soundfile as sf  # Import soundfile for wav conversion
-from io import BytesIO  # Import BytesIO
-import csv
-
-# PDF Report Generation Libraries
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import Image, Paragraph, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib import colors
-from reportlab.lib.units import inch
-
 import boto3
+import os
+import pandas as pd
+import io
+import tempfile
+import uuid
 import time
+import requests
+import string  # Import the string module for punctuation removal
+from botocore.exceptions import ClientError, NoCredentialsError, CredentialRetrievalError
 
-# --- Audio Processing Functions ---
-def detect_cracked_voice(audio_data, sample_rate, threshold=0.8, frame_length=2048, hop_length=512):
-    """Detects cracked voice based on sudden pitch changes."""
-    pitches, magnitudes = librosa.piptrack(y=audio_data, sr=sample_rate, hop_length=hop_length, n_fft=frame_length)
-    pitch_changes = np.diff(np.argmax(pitches, axis=0))  # Find indices of max pitches and get the difference.
-    change_points = np.where(np.abs(pitch_changes) > threshold)[0]  # Absolute value used because direction of change matters.
-
-    # Convert frame indices to time segments
-    segments = []
-    for frame in change_points:
-        time = librosa.frames_to_time(frame, sr=sample_rate, hop_length=hop_length)
-        end_time = librosa.frames_to_time(frame + 1, sr=sample_rate, hop_length=hop_length)  # small segment length
-        segments.append((time, end_time))
-    return segments
-
-def detect_frame_dropping(audio_data, sample_rate, threshold=0.02, frame_length=1024, hop_length=512, cutoff_freq=22000, higherthan_threshold_num=4):
-    """Detects frame drops by analyzing high-frequency energy."""
-    segments = []
-    audio_length = len(audio_data)
-    if audio_length < frame_length:
-        return segments  # Audio too short to analyze
-
-    D = librosa.amplitude_to_db(np.abs(librosa.stft(audio_data, n_fft=frame_length, hop_length=hop_length)), ref=np.max)
-    frequencies = librosa.fft_frequencies(sr=sample_rate, n_fft=frame_length)
-    high_freq_mask = frequencies >= cutoff_freq
-    D_high_freq = D[high_freq_mask, :]
-    high_freq_energy = np.sum(librosa.db_to_amplitude(D_high_freq), axis=0)
-
-    def detect_anomalies(energy, threshold):
-        anomalies = []
-        drop_energy_info = []
-        i = 0
-        while i < len(energy):
-            if energy[i] > threshold:
-                start = i
-                while i < len(energy) and energy[i] > threshold:
-                    i += 1
-                length = i - start
-                if length == 1 or length == 2:
-                    anomalies.append(('drop', start, min(i, len(energy) - 1)))  # 修复：确保索引不超出范围
-                    drop_energy_info.append(f"{np.max(energy[start:i]):.2f}")
-                elif length >= higherthan_threshold_num:
-                    anomalies.append(('noise', start, min(i, len(energy) - 1)))  # 修复：确保索引不超出范围
-            else:
-                i += 1
-        return anomalies, drop_energy_info
-
-    anomalies, _ = detect_anomalies(high_freq_energy, threshold)
-
-    time_axis = np.linspace(0, audio_length / sample_rate, len(high_freq_energy))
-    for anomaly_type, start, end in anomalies:
-        start_time = time_axis[start] if start < len(time_axis) else time_axis[-1]
-        end_time = time_axis[end] if end < len(time_axis) else time_axis[-1]
-        if anomaly_type == 'drop':
-            segments.append((start_time, end_time))
-    return segments
-
-def detect_audio_popping(audio_data, sample_rate, threshold=2.0, frame_length=2048, hop_length=512):
-    """Detects audio popping by identifying sudden spikes in the waveform."""
-    # Calculate the short-time Fourier transform (STFT)
-    stft = librosa.stft(audio_data, n_fft=frame_length, hop_length=hop_length)
-    amplitude = np.abs(stft)
-
-    # Calculate the mean amplitude
-    mean_amplitude = np.mean(amplitude)
-
-    # Find spikes significantly above the mean
-    spike_points = np.where(amplitude > mean_amplitude * threshold)
-
-    # Convert frame indices to time segments
-    segments = []
-    for frame in np.unique(spike_points[1]):  # Use unique frame indices
-        time = librosa.frames_to_time(frame, sr=sample_rate, hop_length=hop_length)
-        end_time = librosa.frames_to_time(frame + 1, sr=sample_rate, hop_length=hop_length)
-        segments.append((time, end_time))
-    return segments
-
-
-def calculate_percentage_clean(issue_segments, total_duration):
-    """Calculates the percentage of audio *without* issues."""
-    total_issue_duration = 0
-    for issue_type, segments in issue_segments.items():
-        for start, end in segments:
-            total_issue_duration += (end - start)
-    clean_duration = total_duration - total_issue_duration
-    percentage_clean = (clean_duration / total_duration) * 100 if total_duration > 0 else 100.0  # Avoid division by zero
-    return max(0.0, min(100.0, percentage_clean))  # Ensure within 0-100 range.
-
-# --- AWS Transcribe Integration ---
-
-def transcribe_audio(audio_bytes, file_name):
-    """Transcribes the audio using AWS Transcribe."""
-
-    # Create a temporary file to store the audio data
-    temp_file_path = f"/tmp/{file_name}"  # Ensure /tmp is writable
-    try:
-        with open(temp_file_path, "wb") as temp_file:
-            temp_file.write(audio_bytes)
-    except Exception as e:
-        return f"Error writing temporary file: {e}"
-
-    transcribe_client = boto3.client("transcribe")
-    job_name = f"transcribe-{file_name.replace('.', '-')}-{int(time.time())}"  # Unique job name
-
-    try:
-        transcribe_client.start_transcription_job(
-            TranscriptionJobName=job_name,
-            Media={"MediaFileUri": f"file://{temp_file_path}"}, # use file uri
-            MediaFormat="wav",  # Or "mp3", depending on the uploaded file type
-            LanguageCode="en-US",  # Adjust as needed
-        )
-
-        while True:
-            status = transcribe_client.get_transcription_job(TranscriptionJobName=job_name)
-            job_status = status["TranscriptionJob"]["TranscriptionJobStatus"]
-            if job_status in ["COMPLETED", "FAILED"]:
-                break
-            time.sleep(5)  # Wait before checking again
-
-        if job_status == "COMPLETED":
-            transcript_uri = status["TranscriptionJob"]["Transcript"]["TranscriptFileUri"]
-            # Download the transcript
-            import urllib.request
-            response = urllib.request.urlopen(transcript_uri)
-            data = response.read()
-            text = eval(data.decode('utf-8'))['results']['transcripts'][0]['transcript']
-            return text
-        else:
-            return f"Transcription failed: {status['TranscriptionJob'].get('FailureReason', 'Unknown reason')}"
-
-    except Exception as e:
-        return f"Error during transcription: {e}"
-    finally:
+class AudioTranscriptionTool:
+    def __init__(self):
+        """Initializes the AudioTranscriptionTool, setting up AWS clients and session state."""
         try:
-            os.remove(temp_file_path) # Delete temp file
-        except OSError as e:
-            print (f"Error deleting temp file: {e}")
+            # --- AWS Credentials Handling ---
+            aws_access_key_id = st.secrets.get('AWS_ACCESS_KEY_ID')
+            aws_secret_access_key = st.secrets.get('AWS_SECRET_ACCESS_KEY')
+            aws_region = st.secrets.get('AWS_REGION', 'us-east-1')
+            s3_bucket_name = st.secrets.get('S3_BUCKET_NAME') # Get S3 bucket name from secrets
 
+            if not s3_bucket_name:
+                st.error("S3_BUCKET_NAME is missing from Streamlit secrets. Please configure it.")
+                raise ValueError("S3_BUCKET_NAME not configured")
 
-# --- PDF Generation Function ---
-def generate_pdf_report(file_name, analysis_report, waveform_image_buffer):
-    pdf_buffer = BytesIO()
-    c = canvas.Canvas(pdf_buffer, pagesize=letter)
-    c.setTitle(f"Audio Analysis Report - {file_name}")
-
-    # --- Styles ---
-    styles = getSampleStyleSheet()
-    title_style = styles['h1']
-    title_style.alignment = 1  # TA_CENTER
-    label_style = styles['Normal']
-    label_style.fontName = 'Helvetica-Bold'
-    value_style = styles['Normal']
-    paragraph_style = styles['Normal']
-    paragraph_style.wordWrap = True
-    paragraph_style.leading = 14
-
-    # --- Layout ---
-    margin = inch
-    text_width = 6 * inch
-    current_y = 10.5 * inch
-    c.leading = 14 #Set default leading for canvas
-
-    def draw_text(text, style, y_position):
-        p = Paragraph(text, style)
-        p.wrapOn(c, text_width, 1 * inch)  # Adjust wrapOn's height for multi-line text
-        p.drawOn(c, margin, y_position - p.height)
-        return y_position - p.height
-
-    # Title
-    current_y = draw_text(f"Audio Analysis Report: {file_name}", title_style, current_y)
-    current_y -= 0.25 * inch
-    c.line(margin, current_y, margin + text_width, current_y)
-
-    # Waveform Image
-    waveform_image = Image(waveform_image_buffer, width=5 * inch, height=1.5 * inch)
-    waveform_image.drawOn(c, margin, current_y - 1.5 * inch)
-    current_y -= (1.5 * inch + 0.25 * inch)  # Account for image height and spacing
-    c.line(margin, current_y, margin + text_width, current_y)
-
-    current_y = draw_text("Analysis Results:", label_style, current_y)
-    c.line(margin, current_y, margin + text_width, current_y)
-    current_y -= 0.25 * inch
-
-    # Analysis Report Details
-    for key, value in analysis_report.items():
-        label_text = f"{key}:"
-        current_y = draw_text(label_text, label_style, current_y)
-        c.line(margin, current_y, margin + text_width, current_y)
-
-        if key == 'Speech-to-Text':
-            value_text = value
-            current_y = draw_text(value_text, paragraph_style, current_y) #Use paragraph here
-        elif "Quality" in key or "Integrity" in key or "Clarity" in key:
-            value_text = value
-            current_y = draw_text(value_text, value_style, current_y)
-
-        else:
-            value_text = value
-            current_y = draw_text(value_text, value_style, current_y)
-
-        current_y -= 0.25 * inch  # Spacing after each key-value pair
-    c.line(margin, current_y, margin + text_width, current_y)
-
-    c.save()
-    pdf_buffer.seek(0)
-    return pdf_buffer
-
-#Combined PDF
-def generate_combined_pdf_report(analysis_results_list):
-    pdf_buffer = io.BytesIO()
-    c = canvas.Canvas(pdf_buffer, pagesize=letter)
-    c.setTitle("Combined Audio Analysis Report")
-
-    # --- Styles --- (Define styles here to ensure they are available)
-    styles = getSampleStyleSheet()
-    title_style = styles['h1']
-    title_style.alignment = 1  # TA_CENTER
-    label_style = styles['Normal']
-    label_style.fontName = 'Helvetica-Bold'
-    value_style = styles['Normal']
-    paragraph_style = styles['Normal']
-    paragraph_style.wordWrap = True
-    paragraph_style.leading = 14  # Line Spacing
-
-    # --- Layout ---
-    margin = inch
-    text_width = 6 * inch
-    c.leading = 14
-
-    def draw_text(text, style, y_position):
-        p = Paragraph(text, style)
-        p.wrapOn(c, text_width, 1 * inch)  # Adjust wrapOn's height for multi-line text
-        p.drawOn(c, margin, y_position - p.height)
-        return y_position - p.height
-
-    for file_data in analysis_results_list:
-        file_name = file_data["file_name"]
-        analysis_report = file_data["report"]
-        waveform_image_buffer = file_data["waveform_image_buffer"]
-
-        c.showPage() # Every File start with showpage,
-        current_y = 10.5 * inch
-
-        # Title
-        current_y = draw_text(f"Audio Analysis Report: {file_name}", title_style, current_y)
-        current_y -= 0.25 * inch
-        c.line(margin, current_y, margin + text_width, current_y) #Horizontal Line
-
-
-        # Waveform Image
-        waveform_image = Image(waveform_image_buffer, width=5 * inch, height=1.5 * inch)
-        waveform_image.drawOn(c, margin, current_y - 1.5 * inch)
-        current_y -= (1.5 * inch + 0.25 * inch)  # Account for image height and spacing
-        c.line(margin, current_y, margin + text_width, current_y)
-
-
-        current_y = draw_text("Analysis Results:", label_style, current_y)
-        c.line(margin, current_y, margin + text_width, current_y)
-        current_y -= 0.25 * inch #Give room
-
-        # Analysis Report Details
-        for key, value in analysis_report.items():
-            label_text = f"{key}:"
-            current_y = draw_text(label_text, label_style, current_y)
-            c.line(margin, current_y, margin + text_width, current_y)
-
-            if key == 'Speech-to-Text':
-                value_text = value # For multiline text, use paragraph
-                current_y = draw_text(value_text, paragraph_style, current_y)
-            elif "Quality" in key or "Integrity" in key or "Clarity" in key:
-                value_text = value #For Percentage
-                current_y = draw_text(value_text, value_style, current_y) #Percentage format
-
+            # Create Transcribe and S3 clients with explicit credentials if available
+            if aws_access_key_id and aws_secret_access_key:
+                self.transcribe_client = boto3.client(
+                    'transcribe',
+                    aws_access_key_id=aws_access_key_id,
+                    aws_secret_access_key=aws_secret_access_key,
+                    region_name=aws_region
+                )
+                self.s3_client = boto3.client(
+                    's3',
+                    aws_access_key_id=aws_access_key_id,
+                    aws_secret_access_key=aws_secret_access_key,
+                    region_name=aws_region
+                )
+                st.success("AWS credentials loaded from Streamlit secrets.")
             else:
-                value_text = value
-                current_y = draw_text(value_text, value_style, current_y) #Normal formatting
-            current_y -= 0.25 * inch  # Space down
-        c.line(margin, current_y, margin + text_width, current_y)
+                st.warning("Using default AWS credentials provider chain. Ensure AWS CLI is configured or running in an environment with IAM role.")
+                self.transcribe_client = boto3.client('transcribe', region_name=aws_region)
+                self.s3_client = boto3.client('s3', region_name=aws_region)
 
-    c.save()
-    pdf_buffer.seek(0)
-    return pdf_buffer
+            self.s3_bucket_name = s3_bucket_name # Store bucket name
+            self.aws_region = aws_region # Store region
 
-def generate_csv_report(file_name, analysis_report):
-    csv_buffer = io.StringIO()
-    writer = csv.writer(csv_buffer)
-
-    # Write header
-    writer.writerow(["Metric", "Value"])
-
-    # Write data
-    for key, value in analysis_report.items():
-        writer.writerow([key, value])
-
-    csv_buffer.seek(0)
-    return csv_buffer.getvalue()
-
-def generate_combined_csv_report(analysis_results_list):
-    csv_buffer = io.StringIO()
-    writer = csv.writer(csv_buffer)
-
-    # Write header
-    header = ["File Name", "Metric", "Value"]
-    writer.writerow(header)
-
-    # Write data
-    for file_data in analysis_results_list:
-        file_name = file_data["file_name"]
-        analysis_report = file_data["report"]
-        for key, value in analysis_report.items():
-            writer.writerow([file_name, key, value])
-
-    csv_buffer.seek(0)
-    return csv_buffer.getvalue()
-
-
-# Function to install packages if not already installed
-def install_packages():
-    packages_to_install = [
-        "librosa",
-        "numpy",
-        "matplotlib",
-        "streamlit",
-        "scipy",
-        "soundfile",
-        "reportlab",
-        "boto3"  # Add boto3 to the list
-    ]
-    installed_packages = [
-        pkg.split("==")[0] for pkg in sys.modules.keys() if pkg in packages_to_install
-    ]
-    for package in packages_to_install:
-        if package not in installed_packages:
-            print(f"Installing {package}...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-            print(f"Installed {package}")
-
-
-# Run package installation at the beginning
-install_packages()
-
-st.title("Audio Analytic Tool")
-
-uploaded_files = st.file_uploader(
-    "Drag and Drop Audio Files or Folder", type=["wav", "mp3"], accept_multiple_files=True
-)
-
-# Initialize session state variables
-if "analysis_completed" not in st.session_state:
-    st.session_state["analysis_completed"] = False
-if "uploaded_file_names" not in st.session_state:
-    st.session_state["uploaded_file_names"] = []
-
-if uploaded_files:
-    new_file_names = [file.name for file in uploaded_files if file.name not in st.session_state["uploaded_file_names"]]
-    if new_file_names:
-        # Reset analysis-related session state only when new files are uploaded
-        st.session_state["analysis_completed"] = False
-        st.session_state["analysis_results"] = {}
-        st.session_state["audio_data"] = {}
-        st.session_state["sample_rates"] = {}
-        st.session_state["fixed_audio_data"] = {}
-        st.session_state["fix_reports"] = {}
-        st.session_state["uploaded_file_names"] = [file.name for file in uploaded_files]
-
-    for uploaded_file in uploaded_files:
-        file_name = uploaded_file.name
-        if file_name not in st.session_state["analysis_results"]:
-            st.session_state["analysis_results"][file_name] = {}
-        if file_name not in st.session_state["fix_reports"]:
-            st.session_state["fix_reports"][file_name] = {}
-
-        try:
-            audio_bytes = uploaded_file.read()
-            audio_data, sample_rate = librosa.load(
-                io.BytesIO(audio_bytes), sr=None
-            )  # Load with original sample rate
-            st.session_state["audio_data"][file_name] = audio_data
-            st.session_state["sample_rates"][file_name] = sample_rate
-
-            st.audio(audio_bytes, format="audio/wav")  # Streamlit audio player
-
-            fig, ax = plt.subplots(figsize=(10, 2))
-            librosa.display.waveshow(audio_data, sr=sample_rate, ax=ax)
-            ax.set_title(f"Waveform for {file_name}")
-            st.pyplot(fig)
-            plt.close(fig)  # Close the plot to free memory
+        except (NoCredentialsError, CredentialRetrievalError) as e:
+            st.error(f"AWS Credentials Error: {e}")
+            st.error("Please configure AWS credentials:")
+            st.error("1. Set AWS_ACCESS_KEY_ID in Streamlit secrets")
+            st.error("2. Set AWS_SECRET_ACCESS_KEY in Streamlit secrets")
+            st.error("3. Set AWS_REGION in Streamlit secrets (e.g., us-east-1)")
+            st.error("4. Set S3_BUCKET_NAME in Streamlit secrets (your S3 bucket name)") # Important: S3_BUCKET_NAME
+            st.error("5. Ensure AWS CLI is configured if not using secrets.")
+            st.stop()
 
         except Exception as e:
-            st.error(f"Error loading {file_name}: {e}")
-            st.session_state["analysis_results"][file_name]["error"] = str(e)
+            st.error(f"Initialization Error: {e}")
+            st.error(f"Detailed error: {e}")
+            st.stop()
 
-    if st.button("Analyze Audio and Highlight Issues"):  # Changed button text
-        st.session_state[
-            "analysis_completed"
-        ] = True  # Set analysis completion status to True when analysis starts
-        analysis_results_list = (
-            []
-        )  # Clear the list before processing files for combined PDF
+        # --- Session State Initialization ---
+        if 'uploaded_files' not in st.session_state:
+            st.session_state.uploaded_files = []
+        if 'transcription_results' not in st.session_state:
+            st.session_state.transcription_results = []
+
+        # --- Word Mapping ---
+        self.word_mapping = {
+            "S0001":"Hey Anka",
+            "S0002":"Hey Anka",
+            "S0003":"Hey Anka",
+            "S0004":"Hey Anka",
+            "S0005":"Hey Anka",
+"S0006":"Hey Anka",
+"S0007":"Hi Anka",
+"S0008":"Hi Anka",
+"S0009":"Hi Anka",
+"S0010":"Hi Anka",
+"S0011":"Hi Anka",
+"S0012":"Hi Anka",
+"S0013":"Previous Track",
+"S0014":"Previous Track",
+"S0015":"Previous Track",
+"S0016":"Previous Track",
+"S0017":"Previous Track",
+"S0018":"Previous Track",
+"S0019":"Next Track",
+"S0020":"Next Track",
+"S0021":"Next Track",
+"S0022":"Next Track",
+"S0023":"Next Track",
+"S0024":"Next Track",
+"S0025":"Increase Volume",
+"S0026":"Increase Volume",
+"S0027":"Increase Volume",
+"S0028":"Increase Volume",
+"S0029":"Increase Volume",
+"S0030":"Increase Volume",
+"S0031":"Decrease Volume",
+"S0032":"Decrease Volume",
+"S0033":"Decrease Volume",
+"S0034":"Decrease Volume",
+"S0035":"Decrease Volume",
+"S0036":"Decrease Volume",
+"S0037":"Start Playing",
+"S0038":"Start Playing",
+"S0039":"Start Playing",
+"S0040":"Start Playing",
+"S0041":"Start Playing",
+"S0042":"Start Playing",
+"S0043":"Resume Playing",
+"S0044":"Resume Playing",
+"S0045":"Resume Playing",
+"S0046":"Resume Playing",
+"S0047":"Resume Playing",
+"S0048":"Resume Playing",
+"S0049":"Pause Audio",
+"S0050":"Pause Audio",
+"S0051":"Pause Audio",
+"S0052":"Pause Audio",
+"S0053":"Pause Audio",
+"S0054":"Pause Audio",
+"S0055":"ANC Mode",
+"S0056":"ANC Mode",
+"S0057":"ANC Mode",
+"S0058":"ANC Mode",
+"S0059":"ANC Mode",
+"S0060":"ANC Mode",
+"S0061":"Transparent Mode",
+"S0062":"Transparent Mode",
+"S0063":"Transparent Mode",
+"S0064":"Transparent Mode",
+"S0065":"Transparent Mode",
+"S0066":"Transparent Mode",
+"S0067":"Adaptive Mode",
+"S0068":"Adaptive Mode",
+"S0069":"Adaptive Mode",
+"S0070":"Adaptive Mode",
+"S0071":"Adaptive Mode",
+"S0072":"Adaptive Mode",
+"S0073":"Answer Call",
+"S0074":"Answer Call",
+"S0075":"Answer Call",
+"S0076":"Answer Call",
+"S0077":"Answer Call",
+"S0078":"Answer Call",
+"S0079":"Reject Call",
+"S0080":"Reject Call",
+"S0081":"Reject Call",
+"S0082":"Reject Call",
+"S0083":"Reject Call",
+"S0084":"Reject Call",
+"S0085":"Start Translation",
+"S0086":"Start Translation",
+"S0087":"Start Translation",
+"S0088":"Start Translation",
+"S0089":"Start Translation",
+"S0090":"Start Translation",
+"S0091":"Hey Siri",
+"S0092":"Hey Siri",
+"S0093":"Hey Siri",
+"S0094":"Hey Siri",
+"S0095":"Hey Siri",
+"S0096":"Hey Siri",
+"S0097":"Hey Anka",
+"S0098":"Hey Anka",
+"S0099":"Hey Anka",
+"S0100":"Hey Anka",
+"S0101":"Hey Anka",
+"S0102":"Hey Anka",
+"S0103":"Hi Anka",
+"S0104":"Hi Anka",
+"S0105":"Hi Anka",
+"S0106":"Hi Anka",
+"S0107":"Hi Anka",
+"S0108":"Hi Anka",
+"S0109":"Previous Track",
+"S0110":"Previous Track",
+"S0111":"Previous Track",
+"S0112":"Previous Track",
+"S0113":"Previous Track",
+"S0114":"Previous Track",
+"S0115":"Next Track",
+"S0116":"Next Track",
+"S0117":"Next Track",
+"S0118":"Next Track",
+"S0119":"Next Track",
+"S0120":"Next Track",
+"S0121":"Increase Volume",
+"S0122":"Increase Volume",
+"S0123":"Increase Volume",
+"S0124":"Increase Volume",
+"S0125":"Increase Volume",
+"S0126":"Increase Volume",
+"S0127":"Decrease Volume",
+"S0128":"Decrease Volume",
+"S0129":"Decrease Volume",
+"S0130":"Decrease Volume",
+"S0131":"Decrease Volume",
+"S0132":"Decrease Volume",
+"S0133":"Start Playing",
+"S0134":"Start Playing",
+"S0135":"Start Playing",
+"S0136":"Start Playing",
+"S0137":"Start Playing",
+"S0138":"Start Playing",
+"S0139":"Resume Playing",
+"S0140":"Resume Playing",
+"S0141":"Resume Playing",
+"S0142":"Resume Playing",
+"S0143":"Resume Playing",
+"S0144":"Resume Playing",
+"S0145":"Pause Audio",
+"S0146":"Pause Audio",
+"S0147":"Pause Audio",
+"S0148":"Pause Audio",
+"S0149":"Pause Audio",
+"S0150":"Pause Audio",
+"S0151":"ANC Mode",
+"S0152":"ANC Mode",
+"S0153":"ANC Mode",
+"S0154":"ANC Mode",
+"S0155":"ANC Mode",
+"S0156":"ANC Mode",
+"S0157":"Transparent Mode",
+"S0158":"Transparent Mode",
+"S0159":"Transparent Mode",
+"S0160":"Transparent Mode",
+"S0161":"Transparent Mode",
+"S0162":"Transparent Mode",
+"S0163":"Adaptive Mode",
+"S0164":"Adaptive Mode",
+"S0165":"Adaptive Mode",
+"S0166":"Adaptive Mode",
+"S0167":"Adaptive Mode",
+"S0168":"Adaptive Mode",
+"S0169":"Answer Call",
+"S0170":"Answer Call",
+"S0171":"Answer Call",
+"S0172":"Answer Call",
+"S0173":"Answer Call",
+"S0174":"Answer Call",
+"S0175":"Reject Call",
+"S0176":"Reject Call",
+"S0177":"Reject Call",
+"S0178":"Reject Call",
+"S0179":"Reject Call",
+"S0180":"Reject Call",
+"S0181":"Start Translation",
+"S0182":"Start Translation",
+"S0183":"Start Translation",
+"S0184":"Start Translation",
+"S0185":"Start Translation",
+"S0186":"Start Translation",
+"S0187":"Hey Siri",
+"S0188":"Hey Siri",
+"S0189":"Hey Siri",
+"S0190":"Hey Siri",
+"S0191":"Hey Siri",
+"S0192":"Hey Siri"
+            # Add more mappings here
+        }
+
+    def extract_code_from_filename(self, filename: str) -> str:
+        """Extracts S-code from filename based on underscore delimiter."""
+        parts = filename.split('_')
+        for part in parts:
+            if part.startswith('S') and part[1:].isdigit():
+                return part
+        return ""
+
+    def transcribe_file(self, file_path: str, filename: str) -> str:
+        """Transcribes audio file using AWS Transcribe, uploading to S3 temporarily."""
+        job_name = f'transcription-{uuid.uuid4()}'
+        s3_key = f'audio_uploads/{filename}' # Key for S3 object
+
+        try:
+            # --- Upload to S3 ---
+            try:
+                self.s3_client.upload_file(file_path, self.s3_bucket_name, s3_key) # Upload temp file to S3
+                st.info(f"File '{filename}' temporarily uploaded to S3 bucket '{self.s3_bucket_name}' in region '{self.aws_region}' for transcription.")
+            except Exception as s3_upload_error:
+                st.error(f"S3 Upload Error for '{filename}': {s3_upload_error}")
+                st.error(f"Please check if: \n- S3_BUCKET_NAME is correct in secrets.\n- AWS credentials have 's3:PutObject' permission for the bucket.\n- The bucket '{self.s3_bucket_name}' exists in region '{self.aws_region}'.")
+                return ""
+
+            # --- Start Transcription Job (using S3 URI) ---
+            try:
+                self.transcribe_client.start_transcription_job(
+                    TranscriptionJobName=job_name,
+                    Media={'MediaFileUri': f's3://{self.s3_bucket_name}/{s3_key}'}, # Use S3 URI
+                    MediaFormat='wav',
+                    LanguageCode='en-US'
+                )
+                st.info(f"Transcription job started for '{filename}' with job name '{job_name}' using S3 URI.")
+            except ClientError as job_error:
+                st.error(f"Transcription Job Start Error for '{filename}': {job_error}")
+                st.error(f"Detailed Job Error: {job_error}")
+                st.error(f"Please check if: \n- AWS credentials have 'transcribe:StartTranscriptionJob' permission.\n- The AWS region is correctly configured and supported by Transcribe.\n- The S3 URI 's3://{self.s3_bucket_name}/{s3_key}' is valid and accessible by Transcribe.")
+                return ""
+
+            # --- Polling for Job Completion ---
+            max_tries = 60  # 30 minutes total (30 seconds * 60)
+            for _ in range(max_tries):
+                try:
+                    result = self.transcribe_client.get_transcription_job(TranscriptionJobName=job_name)
+                    job_status = result['TranscriptionJob']['TranscriptionJobStatus']
+
+                    if job_status == 'COMPLETED':
+                        st.info(f"Transcription job for '{filename}' COMPLETED successfully.")
+                        # --- Retrieve Transcription ---
+                        try:
+                            transcript_uri = result['TranscriptionJob']['Transcript']['TranscriptFileUri']
+                            transcript_response = requests.get(transcript_uri)
+                            transcript_data = transcript_response.json()
+                            transcript_text = transcript_data['results']['transcripts'][0]['transcript'].lower().strip()
+                            return transcript_text
+                        except Exception as transcript_error:
+                            st.error(f"Transcript Retrieval Error for '{filename}': {transcript_error}")
+                            st.error(f"Could not retrieve transcript from: {transcript_uri}")
+                            return ""
+
+                    elif job_status == 'FAILED':
+                        failure_reason = result['TranscriptionJob'].get('FailureReason', 'No reason provided')
+                        st.error(f"Transcription job failed for '{filename}'.")
+                        st.error(f"Failure Reason: {failure_reason}")
+                        return ""
+
+                    time.sleep(30)
+
+                except Exception as poll_error:
+                    st.error(f"Error during transcription job polling for '{filename}': {poll_error}")
+                    return ""
+
+            st.error(f"Transcription job timed out for '{filename}' after 30 minutes.")
+            return ""
+
+        except Exception as e:
+            st.error(f"General transcription error for '{filename}': {e}")
+            st.error(f"Full Exception Details: {e}")
+            return ""
+
+    def compare_transcript(self, original_word: str, transcript_word: str) -> tuple[float, str]: # Return score and string "True"/"False"
+        """Compares original and transcribed words, ignoring punctuation, and returns match score and "True"/"False" string."""
+        original_word = original_word.lower().strip()
+        transcript_word = transcript_word.lower().strip()
+
+        # Remove punctuation from both strings before comparison
+        original_word_no_punct = original_word.translate(str.maketrans('', '', string.punctuation))
+        transcript_word_no_punct = transcript_word.translate(str.maketrans('', '', string.punctuation))
+
+        if original_word_no_punct == transcript_word_no_punct:
+            return 100.0, "True"  # 100% match and "True" string
+        else:
+            return 0.0, "False"   # 0% match and "False" string
+
+
+    def process_batch_transcription(self, uploaded_files):
+        """Processes batch transcription for all uploaded audio files."""
+        results = []
 
         for uploaded_file in uploaded_files:
-            file_name = uploaded_file.name
-            if "error" in st.session_state["analysis_results"][file_name]:
-                continue  # Skip files with loading errors
-
-            audio_data = st.session_state["audio_data"][file_name]
-            sample_rate = st.session_state["sample_rates"][file_name]
-            analysis_report = {}  # Initialize analysis_report here for each file
-            issue_segments = {}
-
-            st.subheader(f"Analysis Report for {file_name}")
-
-            # --- Issue Detection (Using new functions) ---
+            # --- Save uploaded file temporarily ---
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+                temp_file.write(uploaded_file.getvalue())
+                temp_file_path = temp_file.name
 
             try:
-                issue_segments["Cracked Voice"] = detect_cracked_voice(
-                    audio_data, sample_rate
-                )
-                issue_segments["Frame Dropping"] = detect_frame_dropping(
-                    audio_data, sample_rate
-                )
-                issue_segments["Audio Popping"] = detect_audio_popping(
-                    audio_data, sample_rate
-                )
+                filename = uploaded_file.name
+                s_code = self.extract_code_from_filename(filename)
+                original_word = self.word_mapping.get(s_code, "")
 
-                analysis_report["Frame Dropping"] = (
-                    "Detected" if issue_segments["Frame Dropping"] else "Not Detected"
-                )
-                analysis_report["Audio Popping"] = (
-                    "Detected" if issue_segments["Audio Popping"] else "Not Detected"
-                )
-                analysis_report["Cracked Voice"] = (
-                    "Detected" if issue_segments["Cracked Voice"] else "Not Detected"
-                )  # From example output, now detected because of segments
+                # --- Transcribe file ---
+                transcript = self.transcribe_file(temp_file_path, filename)
 
-                if issue_segments["Frame Dropping"]:
-                    st.warning(
-                        f"Frame Dropping: Detected at {', '.join([f'{start:.2f}-{end:.2f}s' for start, end in issue_segments['Frame Dropping']])}"
-                    )  # Adjusted to show start times
-                if issue_segments["Audio Popping"]:
-                    st.warning(
-                        f"Audio Popping: Detected at {', '.join([f'{start:.2f}-{end:.2f}s' for start, end in issue_segments['Audio Popping']])}"
-                    )  # Adjusted to show start times
-                if issue_segments["Cracked Voice"]:
-                    st.warning(
-                        f"Cracked Voice: Detected at {', '.join([f'{start:.2f}-{end:.2f}s' for start, end in issue_segments['Cracked Voice']])}"
-                    )
-                else:
-                    st.success("Cracked Voice: Not Detected")
+                # --- Compare transcript and calculate score and boolean match ---
+                match_score, match_text = self.compare_transcript(original_word, transcript) # Get score and "True"/"False" string
 
-            except Exception as issue_detection_err:
-                st.error(f"Error during issue detection: {issue_detection_err}")
-                analysis_report["Issue Detection Error"] = str(issue_detection_err)
-                issue_segments = {}  # Ensure issue_segments is empty on error
-
-
-            # --- Score Calculation  ---
-
-            try:
-                total_duration = librosa.get_duration(
-                    y=audio_data, sr=sample_rate
-                )  # Get the total duration
-
-                cracked_voice_clean_percentage = calculate_percentage_clean(
-                    {"Cracked Voice": issue_segments.get("Cracked Voice", [])},
-                    total_duration,
-                )
-                frame_dropping_clean_percentage = calculate_percentage_clean(
-                    {"Frame Dropping": issue_segments.get("Frame Dropping", [])},
-                    total_duration,
-                )
-                audio_popping_clean_percentage = calculate_percentage_clean(
-                    {"Audio Popping": issue_segments.get("Audio Popping", [])},
-                    total_duration,
-                )
-
-                cracked_voice_issue_percentage = 100 - cracked_voice_clean_percentage
-                frame_dropping_issue_percentage = 100 - frame_dropping_clean_percentage
-                audio_popping_issue_percentage = 100 - audio_popping_clean_percentage
-
-                st.metric(
-                    "Cracked Voice Quality",
-                    f"{cracked_voice_clean_percentage:.2f}% Clean, {cracked_voice_issue_percentage:.2f}% Issues",
-                )
-                analysis_report[
-                    "Cracked Voice Quality"
-                ] = f"{cracked_voice_clean_percentage:.2f}% Clean, {cracked_voice_issue_percentage:.2f}% Issues"
-                st.metric(
-                    "Frame Integrity",
-                    f"{frame_dropping_clean_percentage:.2f}% Clean, {frame_dropping_issue_percentage:.2f}% Issues",
-                )
-                analysis_report[
-                    "Frame Integrity"
-                ] = f"{frame_dropping_clean_percentage:.2f}% Clean, {frame_dropping_issue_percentage:.2f}% Issues"
-                st.metric(
-                    "Audio Clarity",
-                    f"{audio_popping_clean_percentage:.2f}% Clean, {audio_popping_issue_percentage:.2f}% Issues",
-                )
-                analysis_report[
-                    "Audio Clarity"
-                ] = f"{audio_popping_clean_percentage:.2f}% Clean, {audio_popping_issue_percentage:.2f}% Issues"
-            except Exception as score_err:
-                st.error(f"Error during score calculation: {score_err}")
-                analysis_report["Score Calculation Error"] = str(score_err)
-
-
-            # 4. Speech-to-Text (using AWS Transcribe)
-            try:
-                analysis_report["Speech-to-Text"] = transcribe_audio(audio_bytes, file_name)
-                st.subheader("Speech-to-Text Transcription")
-                st.write(analysis_report["Speech-to-Text"])
+                results.append({
+                    'Filename': filename,
+                    'S-Code': s_code,
+                    'Original Word': original_word,
+                    'Transcribed Text': transcript,
+                    'Match Score (%)': match_score,
+                    'Match': match_text  # Use the "True"/"False" string for 'Match' column
+                })
 
             except Exception as e:
-                analysis_report["Speech-to-Text"] = f"Error during Speech-to-Text: {e}"
-                st.subheader("Speech-to-Text Transcription")
-                st.write(f"Error during Speech-to-Text: {e}")
+                st.error(f"Error processing file '{uploaded_file.name}': {e}")
+                results.append({
+                    'Filename': uploaded_file.name,
+                    'S-Code': '',
+                    'Original Word': '',
+                    'Transcribed Text': 'Error',
+                    'Match Score (%)': 0.0,
+                    'Match': "False" # Default to "False" string in case of error
+                })
 
-            st.session_state["analysis_results"][file_name]["report"] = analysis_report
+            finally:
+                # --- Clean up temporary file ---
+                try:
+                    os.unlink(temp_file_path)
+                except Exception as cleanup_error:
+                    st.warning(f"Warning: Could not delete temporary file '{temp_file_path}'. {cleanup_error}")
+                # --- Optionally, you might want to delete the file from S3 after transcription
+                # --- However, for simplicity and to avoid potential issues, I'm skipping S3 deletion in this code.
+                # --- If you want to implement S3 deletion, add code here using self.s3_client.delete_object(...)
 
-            # Visualization with issue highlighting
-            try:
-                fig, ax = plt.subplots(figsize=(10, 2))
-                librosa.display.waveshow(audio_data, sr=sample_rate, ax=ax)
-                ax.set_title(f"Waveform with Issue Highlighting for {file_name}")
-
-                colors = {
-                    "Cracked Voice": "red",
-                    "Frame Dropping": "yellow",
-                    "Audio Popping": "green",
-                }  # Define colors for issues
-
-                for issue_type, segments in issue_segments.items():
-                    for start_time, end_time in segments:
-                        ax.axvspan(
-                            start_time,
-                            end_time,
-                            color=colors.get(issue_type, "gray"),
-                            alpha=0.3,
-                            label=issue_type
-                            if (start_time, end_time) == segments[0]
-                            else None,
-                        )  # Label only once per type
-
-                # Create legend only if there are issues to display
-                if issue_segments and any(
-                    issue_segments.values()
-                ):  # Check if issue_segments is not empty and has values
-                    handles, labels = ax.get_legend_handles_labels()
-                    unique_labels = []
-                    unique_handles = []
-                    for handle, label in zip(handles, labels):
-                        if label not in unique_labels:
-                            unique_labels.append(label)
-                            unique_handles.append(handle)
-                    ax.legend(
-                        unique_handles, unique_labels
-                    )  # Display legend for issue types
-
-                st.pyplot(fig)
-                image_buffer = io.BytesIO()  # Capture plot to buffer for PDF
-                fig.savefig(image_buffer, format="png")
-                plt.close(fig)  # Close plot after saving to buffer
-
-            except Exception as plot_err:
-                st.error(f"Error during visualization: {plot_err}")
-                analysis_report["Visualization Error"] = str(plot_err)
-                image_buffer = io.BytesIO()  # Create an empty image buffer
+        return results
 
 
-            st.subheader(f"Analysis Details for {file_name}")
-            for key, value in analysis_report.items():
-                st.write(f"- **{key}**: {value}")
+def main():
+    """Main function to run the Streamlit app."""
+    st.title("Audio Transcription & Comparison Tool (S3 Temporary Upload)") # Updated title
+    st.write("Upload WAV audio files to transcribe and compare against expected words (Uses S3 temporarily for transcription).") # Updated description
 
-            file_data = {
-                "file_name": file_name,
-                "report": analysis_report,
-                "waveform_image_buffer": image_buffer,
-            }
-            analysis_results_list.append(file_data)
+    try:
+        # --- Initialize the tool ---
+        tool = AudioTranscriptionTool()
 
+    except Exception as init_error:
+        st.error(f"App Initialization Failed: {init_error}")
+        st.error("Please check the error messages above and your AWS configuration.")
+        return
 
-            # PDF Report Generation
-            try:
-                pdf_report_bytes = generate_pdf_report(
-                    file_name, analysis_report, image_buffer
-                )
-                st.session_state["analysis_results"][file_name][
-                    "pdf_report"
-                ] = pdf_report_bytes  # Store pdf report in session state
+    # --- File uploader ---
+    uploaded_files = st.file_uploader(
+        "Upload Audio Files (.wav)",
+        type=['wav'],
+        accept_multiple_files=True
+    )
 
-            except Exception as pdf_err:
-                st.error(f"Error generating PDF report for {file_name}: {pdf_err}")
-                analysis_report["PDF Generation Error"] = str(pdf_err)
-                st.session_state["analysis_results"][file_name][
-                    "pdf_error"
-                ] = str(pdf_err)
+    if uploaded_files:
+        st.session_state.uploaded_files = uploaded_files
+        st.success(f"{len(uploaded_files)} file(s) uploaded and ready for transcription.")
 
-            # CSV Report Generation
-            try:
-                csv_report_string = generate_csv_report(file_name, analysis_report)
-                st.session_state["analysis_results"][file_name][
-                    "csv_report"
-                ] = csv_report_string  # Store csv report in session state
-            except Exception as csv_err:
-                st.error(f"Error generating CSV report for {file_name}: {csv_err}")
-                analysis_report["CSV Generation Error"] = str(csv_err)
-                st.session_state["analysis_results"][file_name][
-                    "csv_error"
-                ] = str(csv_err)
+    # --- Transcribe Button ---
+    if st.button("Transcribe Audio Files"):
+        if st.session_state.uploaded_files:
+            if not st.secrets.get('S3_BUCKET_NAME'): # Check if S3 bucket is configured
+                st.error("S3_BUCKET_NAME is not configured in Streamlit secrets. Transcription cannot proceed.")
+                st.stop()
 
-        # Combined PDF Generation
-        if len(uploaded_files) > 1:  # Generate combined PDF only if multiple files are uploaded
-            try:
-                combined_pdf_report_bytes = generate_combined_pdf_report(analysis_results_list)
-                st.session_state["combined_pdf_report"] = combined_pdf_report_bytes  # Store combined pdf report in session state
-            except Exception as combined_pdf_err:
-                st.error(f"Error generating combined PDF report: {combined_pdf_err}")
-                st.session_state["combined_pdf_error"] = str(combined_pdf_err)
+            with st.spinner('Processing transcriptions... This may take a few minutes.'):
+                try:
+                    results = tool.process_batch_transcription(st.session_state.uploaded_files)
+                    st.session_state.transcription_results = results
 
-            try:
-                combined_csv_report_string = generate_combined_csv_report(analysis_results_list)
-                st.session_state["combined_csv_report"] = combined_csv_report_string  # Store combined csv report in session state
-            except Exception as combined_csv_err:
-                st.error(f"Error generating combined CSV report: {combined_csv_err}")
-                st.session_state["combined_csv_error"] = str(combined_csv_err)
-    else:
-        analysis_results_list = [] # Ensure this is empty if the button wasn't pressed
+                    # --- Display Results in DataFrame ---
+                    if results:
+                        df = pd.DataFrame(results)
+                        st.dataframe(df)
 
-# Show Download Options Conditionally
-if st.session_state["analysis_completed"] and uploaded_files:
-    if "analysis_results" in st.session_state and st.session_state["analysis_results"]:
-        st.subheader("Download Options")
+                        # --- Dynamic CSV Filename ---
+                        # Get the first uploaded filename to derive CSV name
+                        first_filename = st.session_state.uploaded_files[0].name
+                        base_filename = first_filename.split('_')[0]  # Get part before first underscore
+                        csv_filename = f"{base_filename}.csv"
 
-        # Download buttons
-        if len(uploaded_files) == 1:
-            file_name = uploaded_files[0].name  # Get the single filename
-            if "pdf_report" in st.session_state["analysis_results"][file_name]:
-                pdf_report_bytes = st.session_state["analysis_results"][file_name]["pdf_report"]
-                st.download_button(
-                    label=f"Download PDF Report: {file_name}",
-                    data=pdf_report_bytes,
-                    file_name=f"analysis_report_{file_name}.pdf",
-                    mime="application/pdf",
-                    key=f"pdf_download_{file_name}"
-                )
-            if "csv_report" in st.session_state["analysis_results"][file_name]:
-                csv_report_string = st.session_state["analysis_results"][file_name]["csv_report"]
-                st.download_button(
-                    label=f"Download CSV Report: {file_name}",
-                    data=csv_report_string,
-                    file_name=f"analysis_report_{file_name}.csv",
-                    mime="text/csv",
-                    key=f"csv_download_{file_name}"
-                )
-        elif len(uploaded_files) > 1: # Modified to elif for clarity
-            if "combined_pdf_report" in st.session_state:
-                combined_pdf_report_bytes = st.session_state["combined_pdf_report"]
-                st.download_button(
-                    label="Download Combined PDF Report (All Files)",
-                    data=combined_pdf_report_bytes,
-                    file_name="combined_analysis_report.pdf",
-                    mime="application/pdf",
-                    key="combined_pdf_download",
-                )
-            if "combined_csv_report" in st.session_state:
-                combined_csv_report_string = st.session_state["combined_csv_report"]
-                st.download_button(
-                    label="Download Combined CSV Report (All Files)",
-                    data=combined_csv_report_string,
-                                        file_name="combined_analysis_report.csv",
-                    mime="text/csv",
-                    key="combined_csv_download",
-                )
+                        # --- Download Results Button ---
+                        csv = df.to_csv(index=False)
+                        st.download_button(
+                            label="Download Transcription Results (CSV)",
+                            data=csv,
+                            file_name=csv_filename,  # Use the dynamic filename here
+                            mime="text/csv"
+                        )
+                    else:
+                        st.warning("No transcription results to display.")
 
-        # ZIP creation happens *outside* the single/multi file conditional
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
-            for file_name in st.session_state["analysis_results"]:
-                if "error" in st.session_state["analysis_results"][file_name]:
-                    continue
+                except Exception as process_error:
+                    st.error(f"Transcription Process Error: {process_error}")
+        else:
+            st.warning("Please upload audio files first!")
 
-                if "pdf_report" in st.session_state["analysis_results"][file_name]:
-                    pdf_report_bytes = st.session_state["analysis_results"][file_name]["pdf_report"]
-                    zipf.writestr(f"analysis_report_{file_name}.pdf", pdf_report_bytes.getvalue())
-
-                if "csv_report" in st.session_state["analysis_results"][file_name]:
-                    csv_report_string = st.session_state["analysis_results"][file_name]["csv_report"]
-                    zipf.writestr(f"analysis_report_{file_name}.csv", csv_report_string)
-
-                if file_name in st.session_state["sample_rates"]:
-                    audio_data = st.session_state["audio_data"][file_name]
-                    sample_rate = st.session_state["sample_rates"][file_name]
-                    audio_bytes_zip = io.BytesIO()
-                    sf.write(audio_bytes_zip, audio_data, sample_rate, format="WAV")
-                    zipf.writestr(file_name, audio_bytes_zip.getvalue())
-
-        zip_buffer.seek(0)
-        st.download_button(
-            label="Download All as ZIP",
-            data=zip_buffer,
-            file_name="audio_analysis_reports.zip",
-            mime="application/zip",
-            key="zip_download_all",  # Unique key for the zip download button
-        )
+if __name__ == "__main__":
+    main()
