@@ -15,8 +15,8 @@ class AudioTranscriptionTool:
         """Initializes the AudioTranscriptionTool, setting up AWS clients and session state."""
         try:
             # --- AWS Credentials Handling ---
-            aws_access_key_id = "AKIAUD4REC47PFC3NHF3"  # Replace with your actual access key ID
-            aws_secret_access_key = "63Kb7wM9xTvGOHB5ciRshhl2j/gJrQy30ZrJKiSW" # Replace with your actual secret access key
+            aws_access_key_id = "AKIAUD4REC47NZ24LDEG"  # Replace with your actual access key ID
+            aws_secret_access_key = "rRNAmwCj/OMeOhY5eVz69R3AHYzfy6DhIPbVuPFI" # Replace with your actual secret access key
             aws_region = "us-east-1"  # Or your desired AWS region
             s3_bucket_name = "audio-transcripe-stt" # Replace with your actual S3 bucket name - **Corrected bucket name here**
 
